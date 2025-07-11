@@ -1,30 +1,37 @@
 import streamlit as st
 from PIL import Image
-import numpy as np
-import easyocr
 import re
 
-# Page config
+from doctr.io import DocumentFile
+from doctr.models import ocr_predictor
+
+# Set page config
 st.set_page_config(page_title="Menu Digitizer", layout="centered")
 
+# Title and instructions
 st.title("📸 Menu Card Digitizer")
 st.write("Upload an image of a menu card, and we'll extract the items and prices.")
 
+# Upload image
 uploaded_file = st.file_uploader("Choose a menu image...", type=["jpg", "jpeg", "png", "webp"])
 
 if uploaded_file is not None:
+    # Display uploaded image
     image = Image.open(uploaded_file)
     st.image(image, caption="Uploaded Menu", use_container_width=True)
 
-    with st.spinner("🔍 Reading text with OCR..."):
-        reader = easyocr.Reader(['da', 'en'], gpu=False)
-        results = reader.readtext(np.array(image), detail=0)
+    # OCR Processing with Doctr
+    with st.spinner("🔍 Reading text with OCR (Doctr)..."):
+        doc = DocumentFile.from_images(image)
+        model = ocr_predictor(pretrained=True)
+        result = model(doc)
+        text_lines = result.pages[0].extract_words()
 
     # Extract item–price pairs using regex
     menu_items = []
-    for text in results:
-        clean_text = text.strip()
-        match = re.match(r"(.+?)\s+(\d+[.,]?\d*\s*(kr|dkk|DKK)?)", clean_text, flags=re.IGNORECASE)
+    for word in text_lines:
+        line = word["value"].strip()
+        match = re.match(r"(.+?)\s+(\d+[.,]?\d*\s*(kr|dkk|DKK)?)", line, flags=re.IGNORECASE)
         if match:
             item = match.group(1).strip()
             price = match.group(2).strip()
